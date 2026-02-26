@@ -1,0 +1,653 @@
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Mapa de Disponibilidad - COBASELVA MAYA</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: #f5f7fa;
+                padding: 10px;
+            }
+
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                overflow: hidden;
+            }
+
+            .header {
+                background: linear-gradient(135deg, #2d5016 0%, #4a7c28 50%, #2d5016 100%);
+                color: white;
+                padding: 25px;
+                text-align: center;
+            }
+
+            .header h1 { font-size: 2.2em; margin-bottom: 5px; }
+            .header p { font-size: 1em; opacity: 0.9; margin-bottom: 15px; }
+
+            .legend {
+                display: flex;
+                justify-content: center;
+                gap: 30px;
+                flex-wrap: wrap;
+            }
+
+            .legend-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 0.95em;
+            }
+
+            .legend-color {
+                width: 25px;
+                height: 25px;
+                border-radius: 4px;
+                border: 2px solid rgba(255,255,255,0.5);
+            }
+
+            /* === TABS DE ETAPAS === */
+            .etapas-tabs {
+                display: flex;
+                justify-content: center;
+                gap: 0;
+                background: #e8e8e8;
+                border-bottom: 2px solid #ddd;
+            }
+
+            .etapa-tab {
+                padding: 12px 28px;
+                border: none;
+                background: transparent;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 0.95em;
+                color: #555;
+                transition: all 0.3s ease;
+                border-bottom: 3px solid transparent;
+                position: relative;
+            }
+
+            .etapa-tab:hover {
+                background: rgba(74, 124, 40, 0.1);
+                color: #2d5016;
+            }
+
+            .etapa-tab.active {
+                background: white;
+                color: #2d5016;
+                border-bottom: 3px solid #4a7c28;
+            }
+
+            .etapa-tab .tab-count {
+                display: inline-block;
+                background: #4a7c28;
+                color: white;
+                border-radius: 10px;
+                padding: 1px 7px;
+                font-size: 0.75em;
+                margin-left: 5px;
+                vertical-align: middle;
+            }
+
+            .content {
+                display: flex;
+                gap: 20px;
+                padding: 20px;
+            }
+
+            .map-container {
+                flex: 1;
+                background: #fafafa;
+                border-radius: 8px;
+                padding: 15px;
+                border: 1px solid #e0e0e0;
+                overflow: hidden;
+                min-height: 400px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .map-container svg {
+                width: 100%;
+                height: auto;
+                display: block;
+                transition: all 0.4s ease;
+            }
+
+            .lote {
+                cursor: pointer;
+                transition: opacity 0.3s ease, filter 0.3s ease;
+            }
+
+            .lote:hover {
+                opacity: 0.75 !important;
+                filter: drop-shadow(0 0 6px rgba(0,0,0,0.4));
+            }
+
+            .sidebar {
+                width: 280px;
+                min-width: 280px;
+                background: #fafafa;
+                border-radius: 8px;
+                padding: 15px;
+                border: 1px solid #e0e0e0;
+                max-height: 550px;
+                overflow-y: auto;
+            }
+
+            .info-panel {
+                background: white;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 12px;
+                border-left: 4px solid #4a7c28;
+            }
+
+            .info-panel h3 { color: #333; margin-bottom: 8px; font-size: 1.1em; }
+            .info-panel p { color: #555; font-size: 0.9em; margin-bottom: 6px; line-height: 1.5; }
+
+            .status-badge {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 20px;
+                font-size: 0.8em;
+                font-weight: bold;
+                text-transform: uppercase;
+            }
+
+            .status-available { background: #d4edda; color: #155724; }
+            .status-reserved { background: #fff3cd; color: #856404; }
+            .status-sold { background: #f8d7da; color: #721c24; }
+
+            .controls {
+                padding: 12px 20px;
+                background: #f5f5f5;
+                border-top: 1px solid #e0e0e0;
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            button {
+                padding: 8px 18px;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: bold;
+                transition: all 0.3s ease;
+                font-size: 0.9em;
+            }
+
+            .btn-filter { background: #4a7c28; color: white; }
+            .btn-filter:hover { background: #3a6220; transform: translateY(-1px); }
+            .btn-filter.active { background: #2d5016; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+            .btn-reset { background: #6c757d; color: white; }
+            .btn-reset:hover { background: #5a6268; }
+
+            .stats {
+                background: #fafafa;
+                padding: 15px 20px;
+                border-top: 1px solid #e0e0e0;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+                gap: 15px;
+                text-align: center;
+            }
+
+            .stat-box {
+                padding: 12px;
+                background: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
+            }
+
+            .stat-box .number { font-size: 1.8em; font-weight: bold; color: #4a7c28; }
+            .stat-box .label { font-size: 0.8em; color: #666; text-transform: uppercase; }
+
+            .btn-contact {
+                display: block;
+                width: 100%;
+                margin-top: 12px;
+                padding: 10px;
+                background: #4a7c28;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 0.95em;
+                cursor: pointer;
+                text-align: center;
+                text-decoration: none;
+            }
+            .btn-contact:hover { background: #3a6220; }
+
+            .etapa-label {
+                text-align: center;
+                padding: 8px;
+                font-size: 0.85em;
+                color: #888;
+                border-top: 1px solid #eee;
+            }
+
+            @media (max-width: 768px) {
+                .content { flex-direction: column; }
+                .sidebar { width: 100%; min-width: unset; max-height: 300px; }
+                .header h1 { font-size: 1.6em; }
+                .legend { gap: 15px; }
+                .etapa-tab { padding: 10px 14px; font-size: 0.85em; }
+            }
+
+            /* === COLORES DE ESTADOS === */
+            .available { fill: #28a745 !important; fill-opacity: 0.7 !important; }
+            .reserved  { fill: #ffc107 !important; fill-opacity: 0.7 !important; }
+            .sold      { fill: #dc3545 !important; fill-opacity: 0.7 !important; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Mapa de Disponibilidad</h1>
+                <p>COBA SELVA MAYA - Proyecto Residencial</p>
+            </div>
+        </div>
+
+            <!-- TABS DE ETAPAS -->
+            <div class="etapas-tabs">
+                <button class="etapa-tab active" onclick="changeEtapa(0)">Etapa 1</button>
+                <button class="etapa-tab" onclick="changeEtapa(1)">Etapa 2</button>
+                <button class="etapa-tab" onclick="changeEtapa(2)">Etapa 3</button>
+                <button class="etapa-tab" onclick="changeEtapa(3)">Etapa 4</button>
+                <button class="etapa-tab" onclick="changeEtapa(-1)">Ver Todo</button>
+            </div>
+
+            <div class="content">
+                <div class="map-container" id="mapContainer">
+                    <!-- ========== SVG EMBEBIDO ========== -->
+                    <svg version="1.1" id="svg1" viewBox="0 110 400 190" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                    <defs id="defs1" />
+                    <g id="g1" transform="translate(-36.585064,-294.08762)" style="display:inline">
+                        <path style="fill:#ff6600;fill-opacity:0.141176" d="m 1324.7135,531.18697 -0.2638,27.35085 h 36.7609 l 0.088,-51.27185 -11.3449,17.94075 -3.6058,3.60574 -5.9652,1.59837 z" id="path2" />
+                        <path style="fill:#ff6600;fill-opacity:0.141176" d="m 1324.0925,530.95565 -0.1244,27.54858 -36.8143,-0.37312 v -27.54858 z" id="path3" />
+                        <path style="fill:#ff6600;fill-opacity:0.141176" d="m 1286.7807,530.70691 v 27.48639 l -36.5035,-0.12437 0.062,-27.61077 z" id="path4" />
+                        <path style="fill:#ff6600;fill-opacity:0.141176" d="m 1249.7797,530.52035 -0.1243,27.67295 -36.7522,-0.43531 0.2488,-27.48639 z" id="path5" />
+                        <path style="fill:#ff6600;fill-opacity:0.141176" d="m 1212.3435,530.45816 0.1244,27.29983 -36.6278,-0.31093 0.1244,-27.36202 z" id="path6" />
+                        <path style="fill:#ff6600;fill-opacity:0.141176" d="m 1175.2804,530.08504 v 27.48639 l -36.5656,-0.49749 -0.1243,-27.4242 z" id="path7" />
+                        <rect style="fill:#ff6600;fill-opacity:0.141176" id="rect7" width="36.503422" height="27.610765" x="1101.6517" y="529.64972" />
+                        <rect style="fill:#ff6600;fill-opacity:0.141176" id="rect8" width="36.503422" height="27.735138" x="1064.4021" y="529.21442" />
+                        <path style="fill:#ff6600;fill-opacity:0.141176" d="m 1027.2767,529.15225 -0.4353,27.54857 36.8766,0.0622 0.1244,-27.42421 z" id="path10" />
+                        <rect style="fill:#ff6600;fill-opacity:0.141176" id="rect10" width="36.503422" height="27.735138" x="989.84052" y="528.59259" />
+                        <rect style="fill:#ff6600;fill-opacity:0.141176" id="rect11" width="36.565609" height="27.735138" x="952.71527" y="528.40601" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.141176" id="rect12" width="36.627796" height="27.610765" x="915.58997" y="528.40601" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.141176" id="rect13" width="36.627796" height="27.921698" x="878.46466" y="528.0329" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.141176" id="rect14" width="36.441235" height="27.610765" x="841.21503" y="527.84631" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.141176" id="rect15" width="36.814354" height="27.983885" x="803.9032" y="527.47321" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect16" width="36.441235" height="27.548578" x="766.90228" y="527.34882" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect17" width="36.627796" height="27.486393" x="729.71478" y="526.97571" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect18" width="41.291775" height="27.610765" x="687.73895" y="526.78918" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect19" width="41.353962" height="27.797325" x="645.94971" y="526.47821" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect20" width="36.627796" height="27.983885" x="608.70007" y="526.1673" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect21" width="36.441235" height="27.610765" x="571.76129" y="526.04291" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect22" width="36.441235" height="27.548578" x="534.57385" y="525.73199" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect23" width="36.565609" height="27.983885" x="497.32416" y="525.54541" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect24" width="36.379047" height="27.672953" x="460.13669" y="525.2345" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect25" width="36.68998" height="27.735138" x="422.76266" y="524.98578" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect26" width="36.565609" height="27.424206" x="385.63736" y="524.98578" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect27" width="36.441235" height="27.797325" x="348.57428" y="524.42609" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect28" width="36.752167" height="27.85951" x="311.20023" y="524.11517" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect29" width="36.379047" height="27.672953" x="274.19934" y="523.92859" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect30" width="36.379047" height="27.610765" x="237.07405" y="523.8042" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect31" width="36.752167" height="27.610765" x="199.70001" y="523.61768" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect32" width="36.503422" height="27.85951" x="162.51253" y="523.18237" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect33" width="36.409172" height="27.438797" x="125.67321" y="523.18402" ry="0.24874564" />
+                        <path style="fill:#ff6600;fill-opacity:0.140187" d="m 124.88171,523.35988 -0.0879,27.08701 -68.948776,-0.52766 23.833058,-54.26198 24.976338,11.08105 -1.31917,5.8923 c 3.07807,13.01585 21.54649,10.3775 21.54649,10.3775 z" id="path33" />
+                        <path style="fill:#ff6600;fill-opacity:0.140187" d="m 94.628673,461.62258 25.064287,10.90517 -14.86268,33.85877 -24.976344,-11.169 z" id="path34" />
+                        <path style="fill:#ff6600;fill-opacity:0.140187" d="m 109.22752,428.11559 25.06429,0.0879 v 27.2629 c -6.27591,-1.03648 -10.5993,6.06256 -14.07118,16.70958 L 94.892508,460.91902 Z" id="path35" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect35" width="36.68998" height="27.610765" x="134.59085" y="428.16153" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect36" width="36.814354" height="27.1133" x="172.15143" y="428.659" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect37" width="36.441235" height="27.85951" x="209.33891" y="428.65903" ry="0.24874564" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect38" width="36.938721" height="27.362001" x="246.27763" y="428.90778" ry="0" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect39" width="36.441193" height="27.486401" x="283.83823" y="429.28088" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect40" width="36.938732" height="27.237652" x="320.65259" y="429.52963" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect41" width="36.752167" height="27.175472" x="357.77786" y="429.90274" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect42" width="36.441223" height="27.672962" x="395.27628" y="429.90274" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect43" width="36.441227" height="27.237644" x="432.33936" y="430.40024" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect44" width="36.627796" height="27.299833" x="469.46463" y="430.64899" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect45" width="36.814354" height="27.486393" x="506.58994" y="430.89774" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect46" width="36.68998" height="27.113274" x="543.7774" y="431.08429" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect47" width="36.503433" height="27.299831" x="581.15149" y="431.14645" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect48" width="36.503422" height="27.299833" x="618.27673" y="431.51959" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect49" width="36.689957" height="27.486401" x="655.33984" y="431.51959" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect50" width="36.441231" height="27.362026" x="692.71387" y="431.83051" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect51" width="36.68998" height="27.36202" x="729.71478" y="432.20364" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect52" width="36.503422" height="27.299833" x="767.02661" y="432.51456" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect53" width="36.503422" height="27.237648" x="804.27631" y="432.76331" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect54" width="36.752167" height="27.175461" x="841.21503" y="432.8877" />
+                        <rect style="fill:#ff9955;fill-opacity:0.140187" id="rect55" width="36.627796" height="27.237648" x="878.52686" y="433.2608" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect56" width="36.876541" height="27.175461" x="915.52777" y="433.38519" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect57" width="37.000912" height="27.113274" x="952.52869" y="433.63391" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect58" width="36.441235" height="27.36202" x="990.21368" y="433.94485" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect59" width="36.752167" height="27.424206" x="1027.1523" y="434.06924" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect60" width="36.689976" height="27.424191" x="1064.4642" y="434.1936" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect61" width="36.627796" height="27.299833" x="1101.5273" y="434.56671" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect62" width="36.814384" height="27.113281" x="1138.6527" y="434.93985" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect63" width="36.627796" height="26.988901" x="1176.0266" y="435.31296" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect64" width="36.379047" height="27.175461" x="1213.3385" y="435.43732" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect65" width="36.565567" height="27.11327" x="1250.4016" y="435.43732" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect66" width="36.627796" height="26.988901" x="1287.5269" y="435.93481" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect67" width="36.876541" height="27.051088" x="1324.59" y="436.12137" />
+                        <path style="fill:#ff6600;fill-opacity:0.140187" d="m 1320.4922,479.38745 -0.1759,35.44178 14.1591,0.17589 c 3.0884,-0.44838 5.3541,-2.54208 6.6838,-6.50792 l 14.7747,-23.21745 c 1.2413,-2.65798 1.068,-4.74173 -2.3745,-5.76038 z" id="path67" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect68" width="27.878521" height="35.44178" x="1291.91" y="479.2995" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect69" width="28.142374" height="35.617691" x="1262.8883" y="478.85977" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect70" width="27.966467" height="35.177944" x="1234.0424" y="479.03568" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect71" width="27.966467" height="35.44178" x="1205.1964" y="478.77182" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect72" width="28.054411" height="35.529724" x="1176.4385" y="478.508" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect73" width="27.878521" height="35.617668" x="1147.6804" y="478.33212" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect74" width="28.230301" height="35.265888" x="1118.7466" y="478.24417" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect75" width="28.406191" height="35.44178" x="1090.1646" y="477.8924" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect76" width="28.054411" height="35.44178" x="1061.0548" y="477.45267" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect77" width="28.230301" height="35.617668" x="1032.2968" y="477.36472" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect78" width="28.054411" height="35.529724" x="1003.5388" y="477.36472" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect79" width="27.966467" height="35.617668" x="974.86884" y="477.10089" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect80" width="28.318245" height="35.529724" x="945.93494" y="476.83704" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect81" width="28.230301" height="35.529724" x="916.91315" y="476.83704" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect82" width="28.406191" height="35.705616" x="887.97931" y="476.39734" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect83" width="28.142357" height="35.617668" x="859.30927" y="476.30939" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect84" width="27.790581" height="36.057396" x="830.72717" y="475.95761" />
+                        <path style="fill:#ff6600;fill-opacity:0.140187" d="m 829.95926,476.10724 -0.0622,35.50844 h -20.5837 c -3.96661,-0.19219 -6.35563,-2.3376 -6.84051,-6.84051 v -22.57366 c 0.18495,-3.13484 1.82909,-5.34111 5.65896,-6.15646 z" id="path84" />
+                        <path style="fill:#ff6600;fill-opacity:0.140187" d="m 597.58534,474.81431 -0.17589,35.26589 22.86566,0.088 c 3.66563,-0.52406 5.7149,-2.78881 6.33203,-6.59587 l -0.0879,-23.56922 c -0.58964,-3.13136 -2.78177,-4.78351 -6.41998,-5.1008 z" id="path85" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect85" width="28.054411" height="35.529724" x="568.73944" y="474.46252" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect86" width="28.318245" height="35.529724" x="539.6297" y="474.28665" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect87" width="28.142357" height="35.177944" x="510.8717" y="474.28665" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect88" width="28.318245" height="35.177944" x="481.76193" y="474.11075" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect89" width="28.230301" height="35.265888" x="452.91605" y="473.67102" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect90" width="28.670025" height="35.44178" x="423.54245" y="473.49515" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect91" width="28.230301" height="35.617668" x="395.04831" y="473.14337" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect92" width="28.494135" height="35.265888" x="365.76266" y="473.31924" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect93" width="28.494135" height="35.617668" x="336.91675" y="473.05542" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect94" width="28.142357" height="35.44178" x="308.24673" y="472.70364" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect95" width="28.318241" height="35.002045" x="279.13699" y="472.7916" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect96" width="27.878521" height="35.177944" x="250.29108" y="472.43982" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect97" width="28.494135" height="35.353836" x="221.18134" y="472.35187" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect98" width="28.494135" height="35.44178" x="192.33542" y="472.08801" />
+                        <rect style="fill:#ff6600;fill-opacity:0.140187" id="rect99" width="28.406191" height="35.705616" x="163.22566" y="471.73624" />
+                        <circle id="path99" style="fill:#ff6600;stroke:#000000" cx="162.78595" cy="471.82419" r="0.044274028" />
+                        <path style="fill:#ff6600;fill-opacity:0.140187" d="m 162.69799,471.6483 0.0879,35.61767 -30.99348,-0.1899 c -4.77011,-0.75912 -7.44124,-4.77356 -5.22366,-10.32294 l 9.63889,-21.57868 c 1.06861,-2.49089 2.58011,-3.20899 5.4724,-3.54463 z" id="path100" />
+                        <rect style="fill:#b3ff80;fill-opacity:0.141176" id="rect100" width="88.553444" height="14.675992" x="1362.3993" y="544.07697" />
+                        <rect style="fill:#b3ff80;fill-opacity:0.141176" id="rect101" width="91.414024" height="12.686028" x="1362.7725" y="436.86761" />
+                        <path style="fill:#b3ff80;fill-opacity:0.141176" d="m 650.11617,472.68699 c -6.51777,0.66906 -9.48249,3.39515 -9.70108,7.71111 l -0.24875,24.2527 c 1.62722,5.25301 4.56142,8.45842 9.70108,8.20861 l 130.46709,0.99498 c 6.97708,-1.55913 7.50576,-5.62597 8.33298,-9.57671 l 0.12437,-23.00897 c -1.19321,-5.13267 -4.37608,-7.63385 -9.20359,-7.95986 z" id="path106" />
+                        <circle id="path107" style="fill:#b3ff80;stroke:#000000" cx="1362.0261" cy="506.51639" r="0.062612928" />
+                        <circle id="path108" style="fill:#b3ff80;stroke:#000000" cx="1362.5237" cy="543.20636" r="0.062612928" />
+                        <circle id="path109" style="fill:#b3ff80;stroke:#000000" cx="1362.0261" cy="506.88953" r="0.062612928" />
+                        <path style="fill:#b3ff80;fill-opacity:0.141176" d="m 1361.9018,506.64077 c 0,0 -0.2487,37.43621 0.2488,36.68998 0.4975,-0.74624 89.1753,0.99498 89.1753,0.99498 l 0.1244,14.92474 9.5767,0.24874 11.4423,-26.24266 -4.0421,-3.76228 -2.4875,0.80842 -3.1093,6.77832 -37.8093,-32.21256 5.9388,-7.21362 c -0.8403,-1.83692 -2.8836,-2.57551 -5.6279,-2.67402 l -53.0139,2.05216 c -2.8847,-0.15765 -4.5253,1.29106 -5.7834,3.23369 z" id="path110" />
+                        <path style="fill:#b3ff80;fill-opacity:0.141176" d="m 1496.411,478.34595 -19.1534,43.84142 -39.7993,-34.45127 c -3.5361,-2.90681 -3.105,-8.26296 1.99,-9.76327 z" id="path111" />
+                        <path style="fill:#b3ff80;fill-opacity:0.141176" d="m 1493.5505,437.17855 -0.062,28.29481 c 0.5486,0.8094 1.3802,1.24142 2.674,1.05717 l 5.348,0.12437 12.8726,-29.41417 z" id="path112" />
+                        <path style="fill:#280b0b;fill-opacity:0.378505" d="m 1454.0804,450.10181 v 13.98323 c -0.1643,0.90668 -0.3328,1.81118 -1.671,2.11068 L 134.37975,457.66506 c -3.87921,0.99447 -7.14009,2.52198 -7.6512,6.41998 l -19.61171,43.88449 c -2.31975,5.02669 0.71144,11.30823 8.70655,12.31228 l 1224.89611,8.00298 c 2.9963,-0.27545 5.0862,-1.79124 6.5079,-4.22135 l 16.3577,-25.59196 c 2.2791,-2.73715 4.9125,-4.46599 8.2666,-4.14362 l 52.6719,0.12437 0.062,1.49248 -50.3089,-0.24875 c -3.4365,0.12514 -6.7783,0.50112 -8.8304,4.29086 l -15.7954,25.1855 c -1.8681,2.98728 -4.8487,4.72311 -8.7061,5.4724 L 115.18889,522.68486 c -7.2506,-0.015 -13.93222,-8.65489 -10.26076,-15.17348 l 19.33997,-44.46329 c 1.82195,-4.32704 5.07936,-6.88735 9.94983,-7.46237 l 1227.49757,8.20861 0.684,-0.87061 v -12.87259 z" id="path113" />
+                    </g>
+                    </svg>
+                    <!-- ========== FIN SVG ========== -->
+                </div>
+
+                <div class="sidebar">
+                    <div id="sidebarContent">
+                        <div class="info-panel">
+                            <h3>Selecciona un Lote</h3>
+                            <p>Haz clic en cualquier lote del mapa para ver su informacion.</p>
+                        </div>
+                    </div>
+                </div>
+        </div>
+
+        <script>
+            // =====================================================
+            // CONFIGURACION DE ETAPAS (viewBox del SVG)
+            // Formato: [x, y, ancho, alto]
+            // Ajusta estos valores si necesitas mover la "camara"
+            // =====================================================
+            const etapas = [
+                { name: 'Etapa 1', viewBox: '0 110 400 190' },
+                { name: 'Etapa 2', viewBox: '340 115 400 190' },
+                { name: 'Etapa 3', viewBox: '680 120 400 190' },
+                { name: 'Etapa 4', viewBox: '1020 125 500 190' },
+            ];
+            const fullViewBox = '0 100 1550 200';
+
+            let currentEtapa = 0;
+
+            // =====================================================
+            // CONFIGURACION DE LOTES
+            // status: 'available' | 'reserved' | 'sold'
+            // etapa: 1, 2, 3 o 4 (para las estadisticas por etapa)
+            // =====================================================
+
+            const lotsData = {
+                // === FILA SUPERIOR (A) ===
+                path35:  { id: 'path35',  status: 'sold', number: 'A-01', price: '$45,000 USD', area: '200 m2', etapa: 1 },
+                rect35:  { id: 'rect35',  status: 'available', number: 'A-02', price: '$45,000 USD', area: '200 m2', etapa: 1 },
+                rect36:  { id: 'rect36',  status: 'available', number: 'A-03', price: '$45,000 USD', area: '200 m2', etapa: 1 },
+                rect37:  { id: 'rect37',  status: 'available',  number: 'A-04', price: '$45,000 USD', area: '200 m2', etapa: 1 },
+                rect38:  { id: 'rect38',  status: 'available', number: 'A-05', price: '$45,000 USD', area: '200 m2', etapa: 1 },
+                rect39:  { id: 'rect39',  status: 'available',      number: 'A-06', price: '$45,000 USD', area: '200 m2', etapa: 1 },
+                rect40:  { id: 'rect40',  status: 'available', number: 'A-07', price: '$45,000 USD', area: '200 m2', etapa: 1 },
+                rect41:  { id: 'rect41',  status: 'available', number: 'A-08', price: '$45,000 USD', area: '200 m2', etapa: 1 },
+                rect42:  { id: 'rect42',  status: 'available',  number: 'A-09', price: '$45,000 USD', area: '200 m2', etapa: 2 },
+                rect43:  { id: 'rect43',  status: 'available', number: 'A-10', price: '$45,000 USD', area: '200 m2', etapa: 2 },
+                rect44:  { id: 'rect44',  status: 'available', number: 'A-11', price: '$45,000 USD', area: '200 m2', etapa: 2 },
+                rect45:  { id: 'rect45',  status: 'available',      number: 'A-12', price: '$45,000 USD', area: '200 m2', etapa: 2 },
+                rect46:  { id: 'rect46',  status: 'available', number: 'A-13', price: '$45,000 USD', area: '200 m2', etapa: 2 },
+                rect47:  { id: 'rect47',  status: 'available', number: 'A-14', price: '$45,000 USD', area: '200 m2', etapa: 2 },
+                rect48:  { id: 'rect48',  status: 'available', number: 'A-15', price: '$45,000 USD', area: '200 m2', etapa: 2 },
+                rect49:  { id: 'rect49',  status: 'available',  number: 'A-16', price: '$45,000 USD', area: '200 m2', etapa: 2 },
+                rect50:  { id: 'rect50',  status: 'available', number: 'A-17', price: '$45,000 USD', area: '200 m2', etapa: 2 },
+                rect51:  { id: 'rect51',  status: 'available', number: 'A-18', price: '$45,000 USD', area: '200 m2', etapa: 3 },
+                rect52:  { id: 'rect52',  status: 'available', number: 'A-19', price: '$45,000 USD', area: '200 m2', etapa: 3 },
+                rect53:  { id: 'rect53',  status: 'available',      number: 'A-20', price: '$45,000 USD', area: '200 m2', etapa: 3 },
+                rect54:  { id: 'rect54',  status: 'available', number: 'A-21', price: '$45,000 USD', area: '200 m2', etapa: 3 },
+                rect55:  { id: 'rect55',  status: 'available', number: 'A-22', price: '$45,000 USD', area: '200 m2', etapa: 3 },
+                rect56:  { id: 'rect56',  status: 'available', number: 'A-23', price: '$45,000 USD', area: '200 m2', etapa: 3 },
+                rect57:  { id: 'rect57',  status: 'available',  number: 'A-24', price: '$45,000 USD', area: '200 m2', etapa: 3 },
+                rect58:  { id: 'rect58',  status: 'available', number: 'A-25', price: '$45,000 USD', area: '200 m2', etapa: 3 },
+                rect59:  { id: 'rect59',  status: 'available', number: 'A-26', price: '$45,000 USD', area: '200 m2', etapa: 4 },
+                rect60:  { id: 'rect60',  status: 'available', number: 'A-27', price: '$45,000 USD', area: '200 m2', etapa: 4 },
+                rect61:  { id: 'rect61',  status: 'available',      number: 'A-28', price: '$45,000 USD', area: '200 m2', etapa: 4 },
+                rect62:  { id: 'rect62',  status: 'available', number: 'A-29', price: '$45,000 USD', area: '200 m2', etapa: 4 },
+                rect63:  { id: 'rect63',  status: 'available', number: 'A-30', price: '$45,000 USD', area: '200 m2', etapa: 4 },
+                rect64:  { id: 'rect64',  status: 'available', number: 'A-31', price: '$45,000 USD', area: '200 m2', etapa: 4 },
+                rect65:  { id: 'rect65',  status: 'available', number: 'A-32', price: '$45,000 USD', area: '200 m2', etapa: 4 },
+                rect66:  { id: 'rect66',  status: 'available',  number: 'A-33', price: '$45,000 USD', area: '200 m2', etapa: 4 },
+                rect67:  { id: 'rect67',  status: 'available', number: 'A-34', price: '$45,000 USD', area: '200 m2', etapa: 4 },
+
+                // === FILA MEDIA (B) ===
+                path100: { id: 'path100', status: 'available',  number: 'B-01', price: '$48,000 USD', area: '220 m2', etapa: 1 },
+                rect99:  { id: 'rect99',  status: 'available', number: 'B-02', price: '$48,000 USD', area: '220 m2', etapa: 1 },
+                rect98:  { id: 'rect98',  status: 'available', number: 'B-03', price: '$48,000 USD', area: '220 m2', etapa: 1 },
+                rect97:  { id: 'rect97',  status: 'available', number: 'B-04', price: '$48,000 USD', area: '220 m2', etapa: 1 },
+                rect96:  { id: 'rect96',  status: 'available',      number: 'B-05', price: '$48,000 USD', area: '220 m2', etapa: 1 },
+                rect95:  { id: 'rect95',  status: 'available', number: 'B-06', price: '$48,000 USD', area: '220 m2', etapa: 1 },
+                rect94:  { id: 'rect94',  status: 'available', number: 'B-07', price: '$48,000 USD', area: '220 m2', etapa: 1 },
+                rect93:  { id: 'rect93',  status: 'available', number: 'B-08', price: '$48,000 USD', area: '220 m2', etapa: 1 },
+                rect92:  { id: 'rect92',  status: 'available',  number: 'B-09', price: '$48,000 USD', area: '220 m2', etapa: 1 },
+                rect91:  { id: 'rect91',  status: 'available', number: 'B-10', price: '$48,000 USD', area: '220 m2', etapa: 2 },
+                rect90:  { id: 'rect90',  status: 'available', number: 'B-11', price: '$48,000 USD', area: '220 m2', etapa: 2 },
+                rect89:  { id: 'rect89',  status: 'available', number: 'B-12', price: '$48,000 USD', area: '220 m2', etapa: 2 },
+                rect88:  { id: 'rect88',  status: 'available',      number: 'B-13', price: '$48,000 USD', area: '220 m2', etapa: 2 },
+                rect87:  { id: 'rect87',  status: 'available', number: 'B-14', price: '$48,000 USD', area: '220 m2', etapa: 2 },
+                rect86:  { id: 'rect86',  status: 'available', number: 'B-15', price: '$48,000 USD', area: '220 m2', etapa: 2 },
+                rect85:  { id: 'rect85',  status: 'available', number: 'B-16', price: '$48,000 USD', area: '220 m2', etapa: 2 },
+                path85:  { id: 'path85',  status: 'available',  number: 'B-17', price: '$48,000 USD', area: '220 m2', etapa: 2 },
+                path84:  { id: 'path84',  status: 'available', number: 'B-18', price: '$48,000 USD', area: '220 m2', etapa: 3 },
+                rect84:  { id: 'rect84',  status: 'available', number: 'B-19', price: '$48,000 USD', area: '220 m2', etapa: 3 },
+                rect83:  { id: 'rect83',  status: 'available',      number: 'B-20', price: '$48,000 USD', area: '220 m2', etapa: 3 },
+                rect82:  { id: 'rect82',  status: 'available', number: 'B-21', price: '$48,000 USD', area: '220 m2', etapa: 3 },
+                rect81:  { id: 'rect81',  status: 'available', number: 'B-22', price: '$48,000 USD', area: '220 m2', etapa: 3 },
+                rect80:  { id: 'rect80',  status: 'available', number: 'B-23', price: '$48,000 USD', area: '220 m2', etapa: 3 },
+                rect79:  { id: 'rect79',  status: 'available',  number: 'B-24', price: '$48,000 USD', area: '220 m2', etapa: 3 },
+                rect78:  { id: 'rect78',  status: 'available', number: 'B-25', price: '$48,000 USD', area: '220 m2', etapa: 3 },
+                rect77:  { id: 'rect77',  status: 'available', number: 'B-26', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                rect76:  { id: 'rect76',  status: 'available',      number: 'B-27', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                rect75:  { id: 'rect75',  status: 'available', number: 'B-28', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                rect74:  { id: 'rect74',  status: 'available', number: 'B-29', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                rect73:  { id: 'rect73',  status: 'available', number: 'B-30', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                rect72:  { id: 'rect72',  status: 'available',  number: 'B-31', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                rect71:  { id: 'rect71',  status: 'available', number: 'B-32', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                rect70:  { id: 'rect70',  status: 'available', number: 'B-33', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                rect69:  { id: 'rect69',  status: 'available',      number: 'B-34', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                rect68:  { id: 'rect68',  status: 'available', number: 'B-35', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+                path67:  { id: 'path67',  status: 'available', number: 'B-36', price: '$48,000 USD', area: '220 m2', etapa: 4 },
+
+                // === FILA INFERIOR (C) ===
+                path33:  { id: 'path33',  status: 'available', number: 'C-01', price: '$42,000 USD', area: '180 m2', etapa: 1 },
+                rect33:  { id: 'rect33',  status: 'available', number: 'C-02', price: '$42,000 USD', area: '180 m2', etapa: 1 },
+                rect32:  { id: 'rect32',  status: 'available',      number: 'C-03', price: '$42,000 USD', area: '180 m2', etapa: 1 },
+                rect31:  { id: 'rect31',  status: 'available', number: 'C-04', price: '$42,000 USD', area: '180 m2', etapa: 1 },
+                rect30:  { id: 'rect30',  status: 'available', number: 'C-05', price: '$42,000 USD', area: '180 m2', etapa: 1 },
+                rect29:  { id: 'rect29',  status: 'available',  number: 'C-06', price: '$42,000 USD', area: '180 m2', etapa: 1 },
+                rect28:  { id: 'rect28',  status: 'available', number: 'C-07', price: '$42,000 USD', area: '180 m2', etapa: 1 },
+                rect27:  { id: 'rect27',  status: 'available', number: 'C-08', price: '$42,000 USD', area: '180 m2', etapa: 1 },
+                rect26:  { id: 'rect26',  status: 'available', number: 'C-09', price: '$42,000 USD', area: '180 m2', etapa: 2 },
+                rect25:  { id: 'rect25',  status: 'available',      number: 'C-10', price: '$42,000 USD', area: '180 m2', etapa: 2 },
+                rect24:  { id: 'rect24',  status: 'available', number: 'C-11', price: '$42,000 USD', area: '180 m2', etapa: 2 },
+                rect23:  { id: 'rect23',  status: 'available', number: 'C-12', price: '$42,000 USD', area: '180 m2', etapa: 2 },
+                rect22:  { id: 'rect22',  status: 'available',  number: 'C-13', price: '$42,000 USD', area: '180 m2', etapa: 2 },
+                rect21:  { id: 'rect21',  status: 'available', number: 'C-14', price: '$42,000 USD', area: '180 m2', etapa: 2 },
+                rect20:  { id: 'rect20',  status: 'available', number: 'C-15', price: '$42,000 USD', area: '180 m2', etapa: 2 },
+                rect19:  { id: 'rect19',  status: 'available', number: 'C-16', price: '$42,000 USD', area: '180 m2', etapa: 2 },
+                rect18:  { id: 'rect18',  status: 'available',      number: 'C-17', price: '$42,000 USD', area: '180 m2', etapa: 3 },
+                rect17:  { id: 'rect17',  status: 'available', number: 'C-18', price: '$42,000 USD', area: '180 m2', etapa: 3 },
+                rect16:  { id: 'rect16',  status: 'available', number: 'C-19', price: '$42,000 USD', area: '180 m2', etapa: 3 },
+                rect15:  { id: 'rect15',  status: 'available', number: 'C-20', price: '$42,000 USD', area: '180 m2', etapa: 3 },
+                rect14:  { id: 'rect14',  status: 'available',  number: 'C-21', price: '$42,000 USD', area: '180 m2', etapa: 3 },
+                rect13:  { id: 'rect13',  status: 'available', number: 'C-22', price: '$42,000 USD', area: '180 m2', etapa: 3 },
+                rect12:  { id: 'rect12',  status: 'available', number: 'C-23', price: '$42,000 USD', area: '180 m2', etapa: 3 },
+                rect11:  { id: 'rect11',  status: 'available', number: 'C-24', price: '$42,000 USD', area: '180 m2', etapa: 3 },
+                rect10:  { id: 'rect10',  status: 'available',      number: 'C-25', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                path10:  { id: 'path10',  status: 'available', number: 'C-26', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                rect8:   { id: 'rect8',   status: 'available', number: 'C-27', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                rect7:   { id: 'rect7',   status: 'available', number: 'C-28', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                path7:   { id: 'path7',   status: 'available',  number: 'C-29', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                path6:   { id: 'path6',   status: 'available', number: 'C-30', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                path5:   { id: 'path5',   status: 'available', number: 'C-31', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                path4:   { id: 'path4',   status: 'available', number: 'C-32', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                path3:   { id: 'path3',   status: 'available',      number: 'C-33', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                path2:   { id: 'path2',   status: 'available', number: 'C-34', price: '$42,000 USD', area: '180 m2', etapa: 4 },
+                path34:  { id: 'path34',  status: 'available', number: 'C-35', price: '$42,000 USD', area: '180 m2', etapa: 1 },
+            };
+
+            // =====================================================
+            // FUNCIONES - NO EDITAR
+            // =====================================================
+
+            function changeEtapa(index) {
+                const svg = document.getElementById('svg1');
+                const tabs = document.querySelectorAll('.etapa-tab');
+
+                tabs.forEach(t => t.classList.remove('active'));
+
+                if (index === -1) {
+                    // Ver todo
+                    svg.setAttribute('viewBox', fullViewBox);
+                    tabs[4].classList.add('active');
+                    currentEtapa = -1;
+                } else {
+                    svg.setAttribute('viewBox', etapas[index].viewBox);
+                    tabs[index].classList.add('active');
+                    currentEtapa = index;
+                }
+
+                updateStats();
+            }
+
+            function initializeMap() {
+                Object.entries(lotsData).forEach(([key, lotData]) => {
+                    const element = document.getElementById(lotData.id);
+                    if (element) {
+                        element.classList.add('lote', lotData.status);
+                        element.addEventListener('click', () => showLotInfo(lotData));
+                    }
+                });
+                updateTabCounts();
+                updateStats();
+            }
+
+            function updateTabCounts() {
+                const tabs = document.querySelectorAll('.etapa-tab');
+                for (let i = 0; i < 4; i++) {
+                    const count = Object.values(lotsData).filter(l => l.etapa === (i + 1)).length;
+                    tabs[i].innerHTML = `Etapa ${i + 1} <span class="tab-count">${count}</span>`;
+                }
+                const total = Object.keys(lotsData).length;
+                tabs[4].innerHTML = `Ver Todo <span class="tab-count">${total}</span>`;
+            }
+
+            function showLotInfo(lotData) {
+                const statusLabels = { 'available': 'Disponible', 'reserved': 'Reservado', 'sold': 'Vendido' };
+                const statusClass  = { 'available': 'status-available', 'reserved': 'status-reserved', 'sold': 'status-sold' };
+
+                let html = `
+                    <div class="info-panel">
+                        <h3>Lote ${lotData.number}</h3>
+                        <p><strong>Etapa:</strong> ${lotData.etapa}</p>
+                        <p><strong>Estado:</strong> <span class="status-badge ${statusClass[lotData.status]}">${statusLabels[lotData.status]}</span></p>
+                        <p><strong>Area:</strong> ${lotData.area}</p>
+                `;
+
+                if (lotData.status === 'available') {
+                    html += `<a class="btn-contact" href="#contacto">Solicitar Informacion</a>`;
+                }
+
+                html += `</div>`;
+                document.getElementById('sidebarContent').innerHTML = html;
+            }
+
+            function filterLots(status) {
+                document.querySelectorAll('.btn-filter').forEach(btn => btn.classList.remove('active'));
+                document.getElementById('btn' + status.charAt(0).toUpperCase() + status.slice(1)).classList.add('active');
+
+                document.querySelectorAll('.lote').forEach(lot => {
+                    if (lot.classList.contains(status)) {
+                        lot.style.opacity = '1';
+                        lot.style.pointerEvents = 'auto';
+                    } else {
+                        lot.style.opacity = '0.15';
+                        lot.style.pointerEvents = 'none';
+                    }
+                });
+            }
+
+            function resetFilter() {
+                document.querySelectorAll('.btn-filter').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.lote').forEach(lot => {
+                    lot.style.opacity = '1';
+                    lot.style.pointerEvents = 'auto';
+                });
+            }
+
+            function updateStats() {
+                let a = 0, r = 0, s = 0;
+                const etapaFilter = currentEtapa >= 0 ? currentEtapa + 1 : null;
+
+                Object.values(lotsData).forEach(lot => {
+                    if (etapaFilter && lot.etapa !== etapaFilter) return;
+                    if (lot.status === 'available') a++;
+                    else if (lot.status === 'reserved') r++;
+                    else if (lot.status === 'sold') s++;
+                });
+
+                document.getElementById('statAvailable').textContent = a;
+                document.getElementById('statReserved').textContent = r;
+                document.getElementById('statSold').textContent = s;
+                document.getElementById('statTotal').textContent = a + r + s;
+            }
+
+            document.addEventListener('DOMContentLoaded', initializeMap);
+        </script>
+    </body>
+    </html>
