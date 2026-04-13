@@ -1,13 +1,13 @@
 require("dotenv").config();
 const express = require('express');
 const cors = require('cors');
-
+const path = require('path');
 
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 const requireAuth = require("./middleware/requireAuth");
-  
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use(cors({
   origin: ['http://localhost:3000', 'http://localhost:5173', 'tracking-service-khaki.vercel.app'],

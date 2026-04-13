@@ -9,8 +9,26 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 
-const upload = multer({ storage: multer.memoryStorage() });
+const fs = require('fs');
+const path = require('path');
 
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const { id } = req.params;
+    const dir = path.join(__dirname, '../uploads/orders', id.toString());
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+  
+    const safeFileName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
+    cb(null, `${Date.now()}_${safeFileName}`);
+  }
+});
+const upload = multer({ storage: storage });
 // 1. OBTENER TODAS LAS ÓRDENES
 router.get("/", async (req, res) => {
   try {
@@ -670,7 +688,7 @@ router.patch("/:id/status", async (req, res) => {
 
 
 
-// Función para subir archivo
+// Función para subir archivo al VPS
 const uploadOrderFile = async (req, res) => {
   try {
     const { id } = req.params;
@@ -680,32 +698,18 @@ const uploadOrderFile = async (req, res) => {
       return res.status(400).json({ error: "No se proporcionó ningún archivo" });
     }
 
-    // 1. Subir al Storage de Supabase
-    // Limpiamos el nombre del archivo para evitar problemas con espacios o caracteres raros
-    const safeFileName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
-    const filePath = `orders/${id}/${Date.now()}_${safeFileName}`;
-    
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('order_files')
-      .upload(filePath, file.buffer, {
-        contentType: file.mimetype,
-      });
+    // La URL pública con la que React descargará el archivo
+    const fileUrl = `/api/uploads/orders/${id}/${file.filename}`;
+    const filePath = file.path; // Ruta física en el VPS
 
-    if (uploadError) throw uploadError;
-
-    // 2. Obtener URL pública
-    const { data: urlData } = supabase.storage
-      .from('order_files')
-      .getPublicUrl(filePath);
-
-    // 3. Guardar registro en la base de datos de PostgreSQL
+    // Guardar solo el registro en PostgreSQL
     const { data: fileRecord, error: dbError } = await supabase
       .from('order_files')
       .insert([{ 
         order_id: id, 
         file_name: file.originalname, 
         file_path: filePath, 
-        file_url: urlData.publicUrl 
+        file_url: fileUrl 
       }])
       .select()
       .single();
@@ -719,12 +723,12 @@ const uploadOrderFile = async (req, res) => {
   }
 };
 
-// Función para eliminar archivo
+// Función para eliminar archivo del VPS
 const deleteOrderFile = async (req, res) => {
   try {
     const { id, fileId } = req.params;
 
-    // 1. Obtener los datos del archivo de la BD
+
     const { data: fileData, error: fetchError } = await supabase
       .from('order_files')
       .select('file_path')
@@ -734,14 +738,12 @@ const deleteOrderFile = async (req, res) => {
 
     if (fetchError || !fileData) throw new Error("Archivo no encontrado");
 
-    // 2. Eliminar del Storage
-    const { error: storageError } = await supabase.storage
-      .from('order_files')
-      .remove([fileData.file_path]);
+    // 2. Eliminar del disco duro del VPS
+    if (fs.existsSync(fileData.file_path)) {
+      fs.unlinkSync(fileData.file_path);
+    }
 
-    if (storageError) throw storageError;
-
-    // 3. Eliminar de la Base de datos
+    // 3. Eliminar registro de PostgreSQL
     const { error: dbError } = await supabase
       .from('order_files')
       .delete()
@@ -757,10 +759,12 @@ const deleteOrderFile = async (req, res) => {
 };
 
 
-router.post("/:id/files", upload.single('file'), uploadOrderFile);
-router.delete("/:id/files/:fileId", deleteOrderFile);
+router.post('/:id/files', upload.single('file'), uploadOrderFile);
+router.delete('/:id/files/:fileId', deleteOrderFile);
 
 module.exports = router;
+
+
 
 
 
