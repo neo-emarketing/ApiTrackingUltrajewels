@@ -1,7 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { createClient } = require('@supabase/supabase-js');
+const multer = require('multer'); 
 
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY; 
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 // 1. OBTENER TODAS LAS ÓRDENES
 router.get("/", async (req, res) => {
@@ -89,8 +97,9 @@ router.get("/", async (req, res) => {
 });
 
 
-// 2. OBTENER ORDEN POR ID CON LISTA DE NOTAS COMPLETA
 
+
+// 2. OBTENER ORDEN POR ID CON LISTA DE NOTAS Y ARCHIVOS
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -132,13 +141,30 @@ router.get("/:id", async (req, res) => {
 
     const notesResult = await db.query(notesQuery, [id]);
 
+    // 3. Obtener todos los archivos adjuntos de la orden
+    const filesQuery = `
+      SELECT 
+        id, 
+        file_name, 
+        file_url, 
+        created_at,
+        TO_CHAR(created_at, 'DD/MM/YYYY HH24:MI') as fecha_formateada
+      FROM order_files
+      WHERE order_id = $1
+      ORDER BY created_at DESC
+    `;
+
+    const filesResult = await db.query(filesQuery, [id]);
+
+    // 4. Enviar la respuesta uniendo todo
     res.json({
       success: true,
       order: order,
       bitacora: {
         total: notesResult.rows.length,
         notas: notesResult.rows
-      }
+      },
+      archivos: filesResult.rows 
     });
   } catch (error) {
     console.error("Error fetching order:", error);
@@ -642,4 +668,99 @@ router.patch("/:id/status", async (req, res) => {
 });
 
 
+
+
+// Función para subir archivo
+const uploadOrderFile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "No se proporcionó ningún archivo" });
+    }
+
+    // 1. Subir al Storage de Supabase
+    // Limpiamos el nombre del archivo para evitar problemas con espacios o caracteres raros
+    const safeFileName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
+    const filePath = `orders/${id}/${Date.now()}_${safeFileName}`;
+    
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('order_files')
+      .upload(filePath, file.buffer, {
+        contentType: file.mimetype,
+      });
+
+    if (uploadError) throw uploadError;
+
+    // 2. Obtener URL pública
+    const { data: urlData } = supabase.storage
+      .from('order_files')
+      .getPublicUrl(filePath);
+
+    // 3. Guardar registro en la base de datos de PostgreSQL
+    const { data: fileRecord, error: dbError } = await supabase
+      .from('order_files')
+      .insert([{ 
+        order_id: id, 
+        file_name: file.originalname, 
+        file_path: filePath, 
+        file_url: urlData.publicUrl 
+      }])
+      .select()
+      .single();
+
+    if (dbError) throw dbError;
+
+    res.status(201).json({ success: true, file: fileRecord });
+  } catch (error) {
+    console.error("Error en uploadOrderFile:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Función para eliminar archivo
+const deleteOrderFile = async (req, res) => {
+  try {
+    const { id, fileId } = req.params;
+
+    // 1. Obtener los datos del archivo de la BD
+    const { data: fileData, error: fetchError } = await supabase
+      .from('order_files')
+      .select('file_path')
+      .eq('id', fileId)
+      .eq('order_id', id)
+      .single();
+
+    if (fetchError || !fileData) throw new Error("Archivo no encontrado");
+
+    // 2. Eliminar del Storage
+    const { error: storageError } = await supabase.storage
+      .from('order_files')
+      .remove([fileData.file_path]);
+
+    if (storageError) throw storageError;
+
+    // 3. Eliminar de la Base de datos
+    const { error: dbError } = await supabase
+      .from('order_files')
+      .delete()
+      .eq('id', fileId);
+
+    if (dbError) throw dbError;
+
+    res.json({ success: true, message: "Archivo eliminado correctamente" });
+  } catch (error) {
+    console.error("Error en deleteOrderFile:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+
+router.post("/:id/files", upload.single('file'), uploadOrderFile);
+router.delete("/:id/files/:fileId", deleteOrderFile);
+
 module.exports = router;
+
+
+
